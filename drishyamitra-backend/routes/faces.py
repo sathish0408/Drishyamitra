@@ -109,24 +109,24 @@ def detect_faces():
 
 @bp.route("/label", methods=["POST"])
 def label_face():
-    """Label an unrecognised face with a person name.
+    """Label unrecognized face(s) with a person name.
 
-    Expects JSON: ``{"face_id": 42, "name": "Priya Sharma"}``
-
-    If the person already exists, links the face. Otherwise creates a new
-    Person record. Also auto-links other unidentified faces whose embeddings
-    are similar.
+    Expects JSON: ``{"face_ids": [42, 43], "name": "Priya Sharma"}`` or ``{"face_id": 42, "name": "..."}``
     """
     data = request.get_json(silent=True) or {}
+    face_ids = data.get("face_ids")
     face_id = data.get("face_id")
     name = data.get("name", "").strip()
 
-    if not face_id or not name:
-        return jsonify({"error": "face_id and name are required"}), 400
+    if not name or (not face_ids and not face_id):
+        return jsonify({"error": "face_id/face_ids and name are required"}), 400
 
-    face = Face.query.get(face_id)
-    if not face:
-        return jsonify({"error": "Face not found"}), 404
+    # Normalise input to a list of face IDs
+    if not face_ids:
+        if isinstance(face_id, list):
+            face_ids = face_id
+        else:
+            face_ids = [face_id]
 
     try:
         # Find or create person
@@ -147,33 +147,40 @@ def label_face():
             db.session.add(person)
             db.session.flush()  # Get person.id
 
-        # Link the face
-        face.person_id = person.id
+        # Link all requested faces
+        linked_faces = []
+        for fid in face_ids:
+            f = Face.query.get(fid)
+            if f and f.person_id is None:
+                f.person_id = person.id
+                linked_faces.append(f)
 
-        # Auto-link similar unidentified faces
+        # Auto-link similar unidentified faces from the remaining database
         auto_linked = 0
         try:
             from services.embedding_service import EmbeddingService
 
             unlinked = Face.query.filter(
-                Face.person_id.is_(None),
-                Face.id != face.id,
+                Face.person_id.is_(None)
             ).all()
 
             for uf in unlinked:
-                sim = EmbeddingService.calculate_similarity(
-                    face.embedding, uf.embedding
-                )
-                if sim >= EmbeddingService.SIMILARITY_THRESHOLD:
-                    uf.person_id = person.id
-                    auto_linked += 1
+                # Compare against the representative embeddings we just labeled
+                for lf in linked_faces:
+                    sim = EmbeddingService.calculate_similarity(
+                        lf.embedding, uf.embedding
+                    )
+                    if sim >= EmbeddingService.SIMILARITY_THRESHOLD:
+                        uf.person_id = person.id
+                        auto_linked += 1
+                        break
         except Exception as exc:
-            logger.warning("Auto-linking skipped: %s", exc)
+            logger.warning("Auto-linking failed: %s", exc)
 
         db.session.commit()
 
         return jsonify({
-            "message": f'Face labelled as "{name}"',
+            "message": f'Faces successfully labelled as "{name}"',
             "auto_linked": auto_linked,
             "person": person.to_dict(),
         }), 200
@@ -188,14 +195,92 @@ def label_face():
 
 @bp.route("/", methods=["GET"])
 def list_unrecognised():
-    """Return all faces that have not been identified (person_id IS NULL)."""
+    """Return all unrecognised faces, grouped/clustered by similarity."""
     try:
         faces = Face.query.filter(Face.person_id.is_(None)).order_by(
             Face.created_at.desc()
         ).all()
-        return jsonify([f.to_dict() for f in faces]), 200
+
+        from services.embedding_service import EmbeddingService
+
+        # Cluster unrecognized faces
+        clusters = [] # list of lists of Face objects
+        for face in faces:
+            if not face.embedding:
+                continue
+            matched = False
+            for cluster in clusters:
+                rep_face = cluster[0]
+                sim = EmbeddingService.calculate_similarity(face.embedding, rep_face.embedding)
+                if sim >= EmbeddingService.SIMILARITY_THRESHOLD:
+                    cluster.append(face)
+                    matched = True
+                    break
+            if not matched:
+                clusters.append([face])
+
+        # Formulate JSON payload
+        output = []
+        for cluster in clusters:
+            faces_in_cluster = []
+            for face in cluster:
+                photo = Photo.query.get(face.photo_id)
+                filename = photo.filename if photo else "unknown"
+                import os
+                photo_url = f"http://localhost:5000/api/photos/file/{os.path.basename(photo.file_path)}" if (photo and photo.file_path) else None
+                faces_in_cluster.append({
+                    "id": face.id,
+                    "photo_id": face.photo_id,
+                    "filename": filename,
+                    "photo_url": photo_url,
+                    "bounding_box": face.bounding_box,
+                    "confidence": face.confidence
+                })
+            output.append({
+                "id": cluster[0].id, # Use representative face ID as cluster ID
+                "face_ids": [f.id for f in cluster],
+                "faces": faces_in_cluster
+            })
+
+        return jsonify(output), 200
     except Exception as exc:
         logger.exception("Failed to list unrecognised faces")
+        return jsonify({"error": str(exc)}), 500
+
+
+# ── GET /api/faces/crop/<face_id> ─────────────────────────────────────────
+
+@bp.route("/crop/<int:face_id>", methods=["GET"])
+def crop_face(face_id):
+    """Crop and return the face image using OpenCV."""
+    face = Face.query.get(face_id)
+    if not face:
+        return jsonify({"error": "Face not found"}), 404
+
+    photo = Photo.query.get(face.photo_id)
+    if not photo:
+        return jsonify({"error": "Photo not found"}), 404
+
+    try:
+        import cv2
+        import io
+        from flask import send_file
+        from services.vision_service import VisionService
+
+        face_region = VisionService.extract_face_region(photo.file_path, face.bounding_box)
+        if face_region is None or face_region.size == 0:
+            return jsonify({"error": "Failed to extract face region"}), 500
+
+        success, encoded_img = cv2.imencode('.png', face_region)
+        if not success:
+            return jsonify({"error": "Failed to encode image"}), 500
+
+        return send_file(
+            io.BytesIO(encoded_img.tobytes()),
+            mimetype='image/png'
+        )
+    except Exception as exc:
+        logger.exception("Failed to crop face")
         return jsonify({"error": str(exc)}), 500
 
 
@@ -221,6 +306,29 @@ def get_person_photos(person_id):
 
     except Exception as exc:
         logger.exception("Failed to get person photos")
+        return jsonify({"error": str(exc)}), 500
+
+
+# ── DELETE /api/faces/person/<id> ──────────────────────────────────────────
+
+@bp.route("/person/<int:person_id>", methods=["DELETE"])
+def delete_person(person_id):
+    """Delete a person record and unlink their associated faces."""
+    person = Person.query.get(person_id)
+    if not person:
+        return jsonify({"error": "Person not found"}), 404
+
+    try:
+        # Unlink all faces associated with this person
+        for face in person.faces:
+            face.person_id = None
+
+        db.session.delete(person)
+        db.session.commit()
+        return jsonify({"message": f'Person "{person.name}" deleted successfully'}), 200
+    except Exception as exc:
+        db.session.rollback()
+        logger.exception("Failed to delete person")
         return jsonify({"error": str(exc)}), 500
 
 

@@ -140,8 +140,13 @@ class VectorService:
             )
 
             ids = results.get('ids', [[]])[0]
+            distances = results.get('distances', [[]])[0] if 'distances' in results else [0.0] * len(ids)
+            
+            THRESHOLD = 1.15
             photo_ids = []
-            for doc_id in ids:
+            for doc_id, dist in zip(ids, distances):
+                if dist > THRESHOLD:
+                    continue
                 try:
                     photo_ids.append(int(doc_id))
                 except (ValueError, TypeError):

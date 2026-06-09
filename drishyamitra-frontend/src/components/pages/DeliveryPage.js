@@ -112,7 +112,8 @@ export default function DeliveryPage({ showNotif, shareParams, setShareParams })
         showNotif(responseText || "Failed to share photos via agent.", "error");
       }
     } catch (err) {
-      showNotif("Failed to share photos via agent.", "error");
+      const errMsg = err?.response?.data?.response || err?.message || "Failed to share photos via agent.";
+      showNotif(errMsg, "error");
     } finally {
       setSending(false);
       setProgress(0);

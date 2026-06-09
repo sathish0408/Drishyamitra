@@ -108,8 +108,9 @@ export default function App() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      api.faces.unrecognized().then(list => {
-        setUnrecognizedCount(list.length);
+      api.faces.unrecognized().then(clusters => {
+        const totalCount = clusters.reduce((sum, c) => sum + (c.face_ids ? c.face_ids.length : 1), 0);
+        setUnrecognizedCount(totalCount);
       }).catch(err => console.error(err));
     }
   }, [isAuthenticated, page]);
@@ -380,7 +381,13 @@ export default function App() {
               setShareParams={setShareParams}
             />
           ) : (
-            <PageComponent setPage={setPage} showNotif={showNotif} onOpenAnalytics={() => setShowAnalytics(true)} />
+            <PageComponent 
+              setPage={setPage} 
+              showNotif={showNotif} 
+              onOpenAnalytics={() => setShowAnalytics(true)} 
+              setSearch={setGlobalSearch}
+              setShareParams={setShareParams}
+            />
           )}
         </main>
       </div>

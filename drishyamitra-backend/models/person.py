@@ -30,6 +30,13 @@ class Person(db.Model):
 
     def to_dict(self):
         """Return a JSON-serialisable dictionary for the frontend people panel."""
+        import os
+        photo_url = None
+        if self.faces:
+            first_face = self.faces[0]
+            if first_face.photo:
+                photo_url = f"http://localhost:5000/api/photos/file/{os.path.basename(first_face.photo.file_path)}"
+
         return {
             'id': self.id,
             'name': self.name,
@@ -39,5 +46,6 @@ class Person(db.Model):
             'bg': self.bg,
             'tags': self.tags or [],
             'photoCount': self.photo_count,
+            'photo_url': photo_url,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

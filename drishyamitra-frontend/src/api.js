@@ -97,8 +97,11 @@ export const api = {
       const response = await apiClient.get("/faces/");
       return response.data;
     },
-    label: async (faceId, name) => {
-      const response = await apiClient.post("/faces/label", { face_id: faceId, name });
+    label: async (faceIdOrIds, name) => {
+      const payload = Array.isArray(faceIdOrIds)
+        ? { face_ids: faceIdOrIds, name }
+        : { face_id: faceIdOrIds, name };
+      const response = await apiClient.post("/faces/label", payload);
       return response.data;
     },
     persons: async () => {
@@ -107,6 +110,10 @@ export const api = {
     },
     personPhotos: async (personId) => {
       const response = await apiClient.get(`/faces/person/${personId}`);
+      return response.data;
+    },
+    deletePerson: async (personId) => {
+      const response = await apiClient.delete(`/faces/person/${personId}`);
       return response.data;
     },
   },

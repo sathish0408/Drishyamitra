@@ -2,10 +2,12 @@ import React, { useState, useEffect } from "react";
 import { api } from "../../api";
 import { GP } from "../../styles/theme";
 import Avatar from "../common/Avatar";
+import PhotoDetailModal from "./PhotoDetailModal";
 
 export default function PersonPhotosModal({ person, onClose }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
 
   useEffect(() => {
     api.faces.personPhotos(person.id)
@@ -74,15 +76,24 @@ export default function PersonPhotosModal({ person, onClose }) {
               gap: 12
             }}>
               {photos.map(p => (
-                <div key={p.id} style={{
-                  position: "relative",
-                  paddingBottom: "100%",
-                  height: 0,
-                  borderRadius: 12,
-                  overflow: "hidden",
-                  background: GP.surface,
-                  border: `1px solid ${GP.borderLight}`
-                }}>
+                <div 
+                  key={p.id} 
+                  onClick={() => setSelectedPhoto(p)}
+                  style={{
+                    position: "relative",
+                    paddingBottom: "100%",
+                    height: 0,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    background: GP.surface,
+                    border: `1px solid ${GP.borderLight}`,
+                    cursor: "pointer",
+                    boxShadow: GP.shadow1,
+                    transition: "transform 0.2s"
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = "scale(1.03)"}
+                  onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                >
                   <img
                     src={p.url || `http://localhost:5000/api/photos/file/${p.filename}`}
                     alt={p.filename}
@@ -101,6 +112,13 @@ export default function PersonPhotosModal({ person, onClose }) {
           )}
         </div>
       </div>
+
+      {selectedPhoto && (
+        <PhotoDetailModal
+          photo={selectedPhoto}
+          onClose={() => setSelectedPhoto(null)}
+        />
+      )}
     </div>
   );
 }

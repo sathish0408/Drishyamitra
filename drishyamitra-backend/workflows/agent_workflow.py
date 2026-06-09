@@ -195,12 +195,18 @@ def run_agent_workflow(prompt: str, history: List[Dict[str, Any]] = None, photo_
             
         return {
             "response": response_val,
-            "actions": actions
+            "actions": actions,
+            "photo_ids": final_state.get("photo_ids", []),
+            "person_ids": final_state.get("person_ids", []),
+            "album_id": final_state.get("album_id")
         }
     except Exception as exc:
         logger.error("Failed to run agent workflow: %s", exc, exc_info=True)
         return {
             "response": "I encountered an error running my assistant workflow.",
-            "actions": [{"log": f"[error] {exc}"}]
+            "actions": [{"log": f"[error] {exc}"}],
+            "photo_ids": [],
+            "person_ids": [],
+            "album_id": None
         }
 

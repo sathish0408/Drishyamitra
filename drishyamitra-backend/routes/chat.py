@@ -263,6 +263,42 @@ TOOL_HANDLERS = {
 }
 
 
+def _resolve_entities(photo_ids, person_ids, album_id):
+    import os
+    photos = []
+    persons = []
+    album = None
+
+    if photo_ids:
+        seen = set()
+        p_ids = []
+        for pid in photo_ids:
+            if pid not in seen:
+                seen.add(pid)
+                p_ids.append(pid)
+        photo_objs = Photo.query.filter(Photo.id.in_(p_ids)).all()
+        id_order = {pid: idx for idx, pid in enumerate(p_ids)}
+        photo_objs.sort(key=lambda p: id_order.get(p.id, 999))
+        photos = [p.to_dict() for p in photo_objs]
+
+    if person_ids:
+        seen_pe = set()
+        pe_ids = []
+        for peid in person_ids:
+            if peid not in seen_pe:
+                seen_pe.add(peid)
+                pe_ids.append(peid)
+        person_objs = Person.query.filter(Person.id.in_(pe_ids)).all()
+        persons = [p.to_dict() for p in person_objs]
+
+    if album_id:
+        album_obj = Album.query.get(album_id)
+        if album_obj:
+            album = album_obj.to_dict()
+
+    return photos, persons, album
+
+
 # ── POST /api/chat ────────────────────────────────────────────────────────
 
 @bp.route("/", methods=["POST"])
@@ -291,6 +327,11 @@ def chat():
         return jsonify({"error": "prompt is required"}), 400
 
     actions = []
+    
+    # Target variables
+    resolved_photos = []
+    resolved_persons = []
+    resolved_album = None
 
     # ── Attempt 1: LangGraph agent workflow ───────────────────────────
     try:
@@ -298,10 +339,18 @@ def chat():
 
         result = run_agent_workflow(prompt, history, photo_ids=photo_ids)
         if result and result.get("response"):
+            resolved_photos, resolved_persons, resolved_album = _resolve_entities(
+                result.get("photo_ids", []),
+                result.get("person_ids", []),
+                result.get("album_id")
+            )
             _log_interaction(prompt, "langgraph", "agent_workflow", result["response"])
             return jsonify({
                 "response": result["response"],
                 "actions": result.get("actions", []),
+                "photos": resolved_photos,
+                "persons": resolved_persons,
+                "album": resolved_album
             }), 200
     except Exception as exc:
         logger.info("LangGraph workflow unavailable, falling back to Groq: %s", exc)
@@ -370,33 +419,78 @@ def chat():
                 temperature=0.7,
             )
             reply = response.choices[0].message.content or "I've completed the action."
+            
+            # Resolve objects from actions
+            p_ids = []
+            pe_ids = []
+            a_id = None
+            for action in actions:
+                tool_name = action.get("tool")
+                res_val = action.get("result", {})
+                if tool_name == "search_photos" and "photos" in res_val:
+                    p_ids.extend([p["id"] for p in res_val["photos"] if "id" in p])
+                elif tool_name == "get_person":
+                    if "id" in res_val:
+                        pe_ids.append(res_val["id"])
+                    if "photos" in res_val:
+                        p_ids.extend(res_val["photos"])
+                elif tool_name == "create_album" and "id" in res_val:
+                    a_id = res_val["id"]
+            
+            resolved_photos, resolved_persons, resolved_album = _resolve_entities(p_ids, pe_ids, a_id)
         else:
             reply = msg.content or "I couldn't process that request."
 
         _log_interaction(prompt, "groq_direct", "chat", reply)
-        return jsonify({"response": reply, "actions": actions}), 200
+        return jsonify({
+            "response": reply,
+            "actions": actions,
+            "photos": resolved_photos,
+            "persons": resolved_persons,
+            "album": resolved_album
+        }), 200
 
     except Exception as exc:
         logger.warning("Groq API call failed: %s", exc)
 
     # ── Attempt 3: Offline fallback ───────────────────────────────────
-    reply = _offline_fallback(prompt)
+    reply, fallback_photo_ids, fallback_person_ids, fallback_album_id = _offline_fallback(prompt)
+    resolved_photos, resolved_persons, resolved_album = _resolve_entities(
+        fallback_photo_ids, fallback_person_ids, fallback_album_id
+    )
     _log_interaction(prompt, "offline", "fallback", reply)
-    return jsonify({"response": reply, "actions": actions}), 200
+    return jsonify({
+        "response": reply,
+        "actions": actions,
+        "photos": resolved_photos,
+        "persons": resolved_persons,
+        "album": resolved_album
+    }), 200
 
 
 def _offline_fallback(prompt):
-    """Generate a basic response without any LLM by querying the DB."""
+    """Generate a basic response and matched entities without any LLM by querying the DB."""
     prompt_lower = prompt.lower()
+
+    photo_ids = []
+    person_ids = []
+    album_id = None
 
     # Person queries
     persons = Person.query.all()
     for person in persons:
         if person.name.lower() in prompt_lower:
+            person_ids.append(person.id)
+            for face in person.faces:
+                if face.photo_id not in photo_ids:
+                    photo_ids.append(face.photo_id)
             return (
                 f"I found {person.photo_count} photos of {person.name}. "
                 f"Tags: {', '.join(person.tags) if person.tags else 'none'}. "
-                f"Would you like me to share them or create an album?"
+                f"Would you like me to share them or create an album?",
+                photo_ids,
+                person_ids,
+                album_id
             )
 
     # Photo count queries
@@ -405,19 +499,27 @@ def _offline_fallback(prompt):
         people = Person.query.count()
         return (
             f"Your library has {total} photos with {people} recognised people. "
-            f"You can ask me to search, share, or organise them!"
+            f"You can ask me to search, share, or organise them!",
+            [], [], None
         )
 
     # Album queries
     if "album" in prompt_lower:
         albums = Album.query.all()
+        for a in albums:
+            if a.name.lower() in prompt_lower:
+                album_id = a.id
+                photo_ids = [p.id for p in a.photos]
+                return f"Here is the album **{a.name}** containing {len(photo_ids)} photo(s).", photo_ids, [], album_id
+                
         names = ", ".join(a.name for a in albums) if albums else "none yet"
-        return f"Your albums: {names}. Want me to create a new one?"
+        return f"Your albums: {names}. Want me to create a new one?", [], [], None
 
     return (
         "I'm your Drishyamitra AI assistant! I can help you find photos by person, "
         "date, or event, share photos via email or WhatsApp, create albums, and show "
-        "analytics. What would you like to do?"
+        "analytics. What would you like to do?",
+        [], [], None
     )
 
 

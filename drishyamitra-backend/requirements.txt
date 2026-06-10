@@ -16,3 +16,4 @@ groq==0.25.0
 numpy==2.2.6
 scikit-learn==1.6.1
 cloudinary==1.41.0
+gunicorn==23.0.0

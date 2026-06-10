@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { api } from "./api";
+import { api, BACKEND_URL } from "./api";
 
 // Themes and styles
 import { GP, GLOBAL_CSS } from "./styles/theme";
@@ -23,7 +23,7 @@ import AnalyticsModal from "./components/pages/AnalyticsModal";
 export default function App() {
   const [page, setPage] = useState("dashboard");
   const [notification, setNotification] = useState(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(api.auth.isAuthenticated());
   const [unrecognizedCount, setUnrecognizedCount] = useState(0);
@@ -381,7 +381,7 @@ export default function App() {
           }}
         >
           {currentUser?.profile_pic ? (
-            <img src={currentUser.profile_pic.startsWith("http") ? currentUser.profile_pic : "http://localhost:5000" + currentUser.profile_pic} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src={currentUser.profile_pic.startsWith("http") ? currentUser.profile_pic : BACKEND_URL + currentUser.profile_pic} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
             (currentUser?.username || "A").charAt(0).toUpperCase()
           )}

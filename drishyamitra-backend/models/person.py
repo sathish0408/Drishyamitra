@@ -32,6 +32,8 @@ class Person(db.Model):
     def to_dict(self):
         """Return a JSON-serialisable dictionary for the frontend people panel."""
         import os
+        from utils.storage_helpers import get_backend_url
+        base_url = get_backend_url()
         photo_url = None
         if self.faces:
             # Look for a face in a solo photo (photo with only 1 face detected)
@@ -43,12 +45,15 @@ class Person(db.Model):
             
             if solo_face:
                 # Use cropped face URL of that specific single individual's face
-                photo_url = f"http://localhost:5000/api/faces/crop/{solo_face.id}"
+                photo_url = f"{base_url}/api/faces/crop/{solo_face.id}"
             else:
                 # Fallback to the full group photo of the first face
                 first_face = self.faces[0]
                 if first_face.photo:
-                    photo_url = f"http://localhost:5000/api/photos/file/{os.path.basename(first_face.photo.file_path)}"
+                    if first_face.photo.file_path and first_face.photo.file_path.startswith(('http://', 'https://')):
+                        photo_url = first_face.photo.file_path
+                    else:
+                        photo_url = f"{base_url}/api/photos/file/{os.path.basename(first_face.photo.file_path)}"
 
         return {
             'id': self.id,

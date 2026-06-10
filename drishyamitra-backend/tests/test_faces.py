@@ -113,7 +113,7 @@ class FacesRouteTestCase(unittest.TestCase):
         
         # Verify photo_url is populated correctly
         self.assertIsNotNone(cluster1["faces"][0].get("photo_url"))
-        self.assertTrue(cluster1["faces"][0]["photo_url"].startswith("http://localhost:5000/api/photos/file/"))
+        self.assertTrue("api/photos/file/" in cluster1["faces"][0]["photo_url"])
         
         # Face 3 should be in cluster2
         self.assertEqual(len(cluster2["face_ids"]), 1)

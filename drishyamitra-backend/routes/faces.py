@@ -273,6 +273,8 @@ def list_unrecognised():
 
         # Formulate output clusters
         output = []
+        from utils.storage_helpers import get_backend_url
+        base_url = get_backend_url()
 
         # 1. Add the database-clustered placeholder groups
         for pid, group_faces in placeholder_groups.items():
@@ -281,7 +283,13 @@ def list_unrecognised():
                 photo = face.photo
                 filename = photo.filename if photo else "unknown"
                 import os
-                photo_url = f"http://localhost:5000/api/photos/file/{os.path.basename(photo.file_path)}" if (photo and photo.file_path) else None
+                if photo and photo.file_path:
+                    if photo.file_path.startswith(('http://', 'https://')):
+                        photo_url = photo.file_path
+                    else:
+                        photo_url = f"{base_url}/api/photos/file/{os.path.basename(photo.file_path)}"
+                else:
+                    photo_url = None
                 faces_in_cluster.append({
                     "id": face.id,
                     "photo_id": face.photo_id,
@@ -304,7 +312,13 @@ def list_unrecognised():
                 photo = face.photo
                 filename = photo.filename if photo else "unknown"
                 import os
-                photo_url = f"http://localhost:5000/api/photos/file/{os.path.basename(photo.file_path)}" if (photo and photo.file_path) else None
+                if photo and photo.file_path:
+                    if photo.file_path.startswith(('http://', 'https://')):
+                        photo_url = photo.file_path
+                    else:
+                        photo_url = f"{base_url}/api/photos/file/{os.path.basename(photo.file_path)}"
+                else:
+                    photo_url = None
                 faces_in_cluster.append({
                     "id": face.id,
                     "photo_id": face.photo_id,

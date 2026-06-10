@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { api } from "../../api";
+import { api, BACKEND_URL } from "../../api";
 import { GP } from "../../styles/theme";
 import Avatar from "../common/Avatar";
 import PersonPhotosModal from "../gallery/PersonPhotosModal";
@@ -84,7 +84,7 @@ function ClusterAlbumModal({ cluster, onClose, onSaveLabel, saving, persons = []
                 onClick={() => setSelectedPhoto({
                   id: f.photo_id,
                   name: f.filename || `Face crop ${f.id}`,
-                  url: f.photo_url || `http://localhost:5000/api/photos/file/${f.filename}`
+                  url: f.photo_url || `${BACKEND_URL}/api/photos/file/${f.filename}`
                 })}
                 title="Click to view full image"
                 style={{
@@ -95,7 +95,7 @@ function ClusterAlbumModal({ cluster, onClose, onSaveLabel, saving, persons = []
                 }}
               >
                 <img
-                  src={`http://localhost:5000/api/faces/crop/${f.id}`}
+                  src={`${BACKEND_URL}/api/faces/crop/${f.id}`}
                   alt="Match preview"
                   style={{
                     position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
@@ -264,7 +264,7 @@ export default function PeoplePage({ showNotif, setPage, setShareParams, refresh
                 onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
               >
                 <img 
-                  src={`http://localhost:5000/api/faces/crop/${cluster.id}`} 
+                  src={`${BACKEND_URL}/api/faces/crop/${cluster.id}`} 
                   alt="Representative face" 
                   style={{ width: "100%", height: "100%", objectFit: "cover" }} 
                   onError={(e) => { e.currentTarget.style.opacity = 0.4; }}

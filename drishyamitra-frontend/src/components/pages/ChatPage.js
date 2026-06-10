@@ -278,7 +278,9 @@ export default function ChatPage({ showNotif, setPage, setSearch, setShareParams
       if (activePhotoIds.length === 0) {
         for (let i = updatedMessages.length - 1; i >= 0; i--) {
           if (updatedMessages[i].role === "bot" && updatedMessages[i].photos && updatedMessages[i].photos.length > 0) {
-            updatedMessages[i].photos.forEach(p => activePhotoIds.push(p.id));
+            for (const p of updatedMessages[i].photos) {
+              activePhotoIds.push(p.id);
+            }
             break;
           }
         }

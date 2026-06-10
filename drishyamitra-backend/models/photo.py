@@ -35,12 +35,14 @@ class Photo(db.Model):
     def to_dict(self):
         """Return a JSON-serialisable dictionary suitable for the frontend gallery."""
         import os
+        from utils.storage_helpers import get_backend_url
+        base_url = get_backend_url()
         return {
             'id': self.id,
             'name': self.filename,
             'filename': self.filename,
             'file_path': self.file_path,
-            'url': self.file_path if (self.file_path and self.file_path.startswith(('http://', 'https://'))) else (f"http://localhost:5000/api/photos/file/{os.path.basename(self.file_path)}" if self.file_path else None),
+            'url': self.file_path if (self.file_path and self.file_path.startswith(('http://', 'https://'))) else (f"{base_url}/api/photos/file/{os.path.basename(self.file_path)}" if self.file_path else None),
             'size': self.size,
             'date': self.date,
             'upload_date': self.upload_date.isoformat() if self.upload_date else None,

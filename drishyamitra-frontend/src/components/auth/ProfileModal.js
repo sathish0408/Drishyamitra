@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { api } from "../../api";
+import { api, BACKEND_URL } from "../../api";
 import { GP } from "../../styles/theme";
 import IconBtn from "../common/IconBtn";
 import Spinner from "../common/Spinner";
@@ -56,7 +56,7 @@ export default function ProfileModal({ onClose, currentUser, setCurrentUser, onL
   };
 
   const avatarUrl = previewUrl || (currentUser?.profile_pic 
-    ? (currentUser.profile_pic.startsWith("http") ? currentUser.profile_pic : `http://localhost:5000${currentUser.profile_pic}`)
+    ? (currentUser.profile_pic.startsWith("http") ? currentUser.profile_pic : `${BACKEND_URL}${currentUser.profile_pic}`)
     : null);
 
   return (

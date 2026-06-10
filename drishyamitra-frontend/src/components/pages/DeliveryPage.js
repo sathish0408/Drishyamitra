@@ -4,48 +4,6 @@ import { GP } from "../../styles/theme";
 import ProgressBar from "../common/ProgressBar";
 import Spinner from "../common/Spinner";
 
-const extractChatAction = (text) => {
-  if (!text) return null;
-  
-  // 1. Try markdown json block first
-  const mdMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
-  if (mdMatch) {
-    try {
-      const parsed = JSON.parse(mdMatch[1]);
-      if (parsed && (parsed.action === "EXECUTE_WHATSAPP_SHARE" || parsed.action === "EXECUTE_EMAIL_SHARE")) {
-        return parsed;
-      }
-    } catch (e) {}
-  }
-  
-  // 2. Try raw JSON by finding '{' containing '"action"' and matching brackets
-  const startIndex = text.search(/\{\s*("action"|'action')/);
-  if (startIndex !== -1) {
-    let braceCount = 0;
-    let endIndex = -1;
-    for (let i = startIndex; i < text.length; i++) {
-      if (text[i] === "{") braceCount++;
-      else if (text[i] === "}") {
-        braceCount--;
-        if (braceCount === 0) {
-          endIndex = i;
-          break;
-        }
-      }
-    }
-    if (endIndex !== -1) {
-      const rawJson = text.substring(startIndex, endIndex + 1);
-      try {
-        const parsed = JSON.parse(rawJson);
-        if (parsed && (parsed.action === "EXECUTE_WHATSAPP_SHARE" || parsed.action === "EXECUTE_EMAIL_SHARE")) {
-          return parsed;
-        }
-      } catch (e) {}
-    }
-  }
-  return null;
-};
-
 export default function DeliveryPage({ showNotif, shareParams, setShareParams }) {
   const [to, setTo] = useState("");
   const [platform, setPlatform] = useState("email");

@@ -61,3 +61,20 @@ def get_local_image_path(path_or_url):
 
     # Already a local file path
     return path_or_url, False
+
+
+def get_backend_url():
+    """
+    Get the backend base URL dynamically from the current request context,
+    falling back to the BACKEND_URL environment variable or http://localhost:5000.
+    """
+    import os
+    base_url = os.environ.get('BACKEND_URL', 'http://localhost:5000').rstrip('/')
+    try:
+        from flask import request, has_request_context
+        if has_request_context():
+            base_url = request.host_url.rstrip('/')
+    except ImportError:
+        pass
+    return base_url
+

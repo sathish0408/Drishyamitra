@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { api } from "../../api";
+import { api, BACKEND_URL } from "../../api";
 import { GP } from "../../styles/theme";
 import Avatar from "../common/Avatar";
 import PhotoDetailModal from "./PhotoDetailModal";
@@ -276,7 +276,7 @@ export default function PersonPhotosModal({ person, onClose, showNotif }) {
                 <img
                   key={photos[carouselIndex]?.id}
                   className="photo-fade-carousel"
-                  src={photos[carouselIndex]?.url || `http://localhost:5000/api/photos/file/${photos[carouselIndex]?.filename}`}
+                  src={photos[carouselIndex]?.url || `${BACKEND_URL}/api/photos/file/${photos[carouselIndex]?.filename}`}
                   alt={photos[carouselIndex]?.filename}
                   style={{ width: "100%", height: "100%", objectFit: "contain", cursor: "pointer" }}
                   onClick={() => setSelectedPhotoIndex(carouselIndex)}
@@ -336,7 +336,7 @@ export default function PersonPhotosModal({ person, onClose, showNotif }) {
                       onMouseLeave={e => { if (!isActive) e.currentTarget.style.opacity = 0.6; }}
                     >
                       <img
-                        src={p.url || `http://localhost:5000/api/photos/file/${p.filename}`}
+                        src={p.url || `${BACKEND_URL}/api/photos/file/${p.filename}`}
                         alt="Thumbnail"
                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       />
@@ -373,7 +373,7 @@ export default function PersonPhotosModal({ person, onClose, showNotif }) {
                   onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
                 >
                   <img
-                    src={p.url || `http://localhost:5000/api/photos/file/${p.filename}`}
+                    src={p.url || `${BACKEND_URL}/api/photos/file/${p.filename}`}
                     alt={p.filename}
                     style={{
                       position: "absolute",

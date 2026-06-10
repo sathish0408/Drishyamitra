@@ -415,7 +415,7 @@ def run_groq_chat_online(prompt, history, photo_ids, user_id):
     active_photos_info = ""
     if photo_ids:
         photos = Photo.query.filter(Photo.id.in_(photo_ids), Photo.user_id == user_id).all()
-        image_paths = [os.path.abspath(p.file_path) for p in photos]
+        image_paths = [p.file_path if (p.file_path and p.file_path.startswith(('http://', 'https://'))) else os.path.abspath(p.file_path) for p in photos]
         if image_paths:
             active_photos_info = (
                 f"\n\nCRITICAL CONTEXT: The user is currently viewing these photos on the screen (active photos): {json.dumps(image_paths)}.\n"
@@ -734,7 +734,7 @@ def _offline_fallback(prompt, user_id, photo_ids=None, history=None):
             email = email_match.group(0) if email_match else prompt.strip()
             if photo_ids:
                 photos = Photo.query.filter(Photo.id.in_(photo_ids), Photo.user_id == user_id).all()
-                image_paths = [os.path.abspath(p.file_path) for p in photos]
+                image_paths = [p.file_path if (p.file_path and p.file_path.startswith(('http://', 'https://'))) else os.path.abspath(p.file_path) for p in photos]
                 action_json = {
                     "action": "EXECUTE_EMAIL_SHARE",
                     "payload": {
@@ -754,7 +754,7 @@ def _offline_fallback(prompt, user_id, photo_ids=None, history=None):
                 phone = "+" + phone
             if photo_ids:
                 photos = Photo.query.filter(Photo.id.in_(photo_ids), Photo.user_id == user_id).all()
-                image_paths = [os.path.abspath(p.file_path) for p in photos]
+                image_paths = [p.file_path if (p.file_path and p.file_path.startswith(('http://', 'https://'))) else os.path.abspath(p.file_path) for p in photos]
                 action_json = {
                     "action": "EXECUTE_WHATSAPP_SHARE",
                     "payload": {

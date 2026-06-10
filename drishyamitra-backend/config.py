@@ -60,3 +60,7 @@ class Config:
 
     # ChromaDB vector store
     CHROMA_PERSIST_DIR = os.environ.get('CHROMA_PERSIST_DIR', './chroma_data')
+
+    # Face detection mode (use lightweight fallback to avoid TensorFlow OOM in production)
+    USE_LIGHTWEIGHT_DETECTION = os.environ.get('USE_LIGHTWEIGHT_DETECTION', '').lower() == 'true' or 'RENDER' in os.environ
+

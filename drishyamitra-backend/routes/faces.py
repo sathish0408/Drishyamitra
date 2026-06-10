@@ -175,10 +175,10 @@ def label_face():
         for fid in face_ids:
             f = Face.query.join(Face.photo).filter(Face.id == fid, Photo.user_id == g.current_user.id).first()
             if f:
-                if f.person_id is None or f.person.name == "Unnamed Person" or f.person.name.startswith("Cluster_") or f.person.name.startswith("Unknown"):
-                    f.person_id = person.id
-                    f.is_manually_labeled = True
-                    linked_faces.append(f)
+                # Allow labeling any face (even if already labeled, for manual correction/relabeling)
+                f.person_id = person.id
+                f.is_manually_labeled = True
+                linked_faces.append(f)
 
         # Auto-link similar unidentified faces from the remaining database (verifying ownership)
         auto_linked = 0
@@ -497,8 +497,8 @@ def run_face_clustering(app, user_id):
             X = np.array(embeddings, dtype=np.float64)
             
             # Run DBSCAN (cosine distance metric: eps=0.35 equals similarity >= 0.65)
-            db = DBSCAN(eps=0.35, min_samples=1, metric="cosine")
-            labels = db.fit_predict(X)
+            dbscan = DBSCAN(eps=0.35, min_samples=1, metric="cosine")
+            labels = dbscan.fit_predict(X)
 
             # Group faces by cluster ID
             clusters = {}

@@ -20,6 +20,15 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("share", __name__, url_prefix="/api/share")
 
 
+def get_safe_path_or_url(path):
+    """Return the path as-is if it's an HTTP/HTTPS URL, else return absolute path."""
+    if not path:
+        return ""
+    if path.startswith(('http://', 'https://')):
+        return path
+    return os.path.abspath(path)
+
+
 def resolve_sharing_assets(raw_paths, user_id):
     """Resolve a list of image paths that may contain person/album label names.
 
@@ -35,6 +44,11 @@ def resolve_sharing_assets(raw_paths, user_id):
     resolved = []
     for entry in raw_paths:
         entry = entry.strip()
+        # 0. If it's a remote URL, keep it as-is
+        if entry.startswith(('http://', 'https://')):
+            resolved.append(entry)
+            continue
+
         # 1. If the path exists on disk, keep it
         if os.path.isfile(entry):
             resolved.append(os.path.abspath(entry))
@@ -61,7 +75,7 @@ def resolve_sharing_assets(raw_paths, user_id):
             if photo_ids:
                 photos = Photo.query.filter(Photo.id.in_(photo_ids), Photo.user_id == user_id).all()
                 for p in photos:
-                    abs_path = os.path.abspath(p.file_path)
+                    abs_path = get_safe_path_or_url(p.file_path)
                     if abs_path not in resolved:
                         resolved.append(abs_path)
             continue
@@ -73,7 +87,7 @@ def resolve_sharing_assets(raw_paths, user_id):
         ).first()
         if album:
             for p in album.photos:
-                abs_path = os.path.abspath(p.file_path)
+                abs_path = get_safe_path_or_url(p.file_path)
                 if abs_path not in resolved:
                     resolved.append(abs_path)
             continue
@@ -84,7 +98,7 @@ def resolve_sharing_assets(raw_paths, user_id):
             Photo.filename.ilike(f"%{name_candidate}%")
         ).first()
         if photo:
-            resolved.append(os.path.abspath(photo.file_path))
+            resolved.append(get_safe_path_or_url(photo.file_path))
 
     return resolved
 
@@ -131,7 +145,10 @@ def send_whatsapp_async_worker(phone, image_paths, delivery_id, app):
             # Upload photos to public cloud hosting
             media_urls = []
             for path in image_paths:
-                public_url = _upload_for_public_url(path)
+                if path.startswith(('http://', 'https://')):
+                    public_url = path
+                else:
+                    public_url = _upload_for_public_url(path)
                 if not public_url:
                     filename = os.path.basename(path)
                     public_url = f"https://drishyamitra-public-assets.mock/media/{filename}"
@@ -372,23 +389,23 @@ def share_whatsapp():
         if person:
             p_ids = list({f.photo_id for f in person.faces if f.photo_id})
             photos = Photo.query.filter(Photo.id.in_(p_ids), Photo.user_id == g.current_user.id).all() if p_ids else []
-            raw_image_paths.extend([os.path.abspath(p.file_path) for p in photos])
+            raw_image_paths.extend([get_safe_path_or_url(p.file_path) for p in photos])
 
     if album_id:
         album = Album.query.filter_by(id=album_id, user_id=g.current_user.id).first()
         if album:
-            raw_image_paths.extend([os.path.abspath(p.file_path) for p in album.photos])
+            raw_image_paths.extend([get_safe_path_or_url(p.file_path) for p in album.photos])
 
     if label_name:
         person = Person.query.filter(Person.user_id == g.current_user.id, Person.name.ilike(f"%{label_name}%")).first()
         if person:
             p_ids = list({f.photo_id for f in person.faces if f.photo_id})
             photos = Photo.query.filter(Photo.id.in_(p_ids), Photo.user_id == g.current_user.id).all() if p_ids else []
-            raw_image_paths.extend([os.path.abspath(p.file_path) for p in photos])
+            raw_image_paths.extend([get_safe_path_or_url(p.file_path) for p in photos])
         else:
             album = Album.query.filter(Album.user_id == g.current_user.id, Album.name.ilike(f"%{label_name}%")).first()
             if album:
-                raw_image_paths.extend([os.path.abspath(p.file_path) for p in album.photos])
+                raw_image_paths.extend([get_safe_path_or_url(p.file_path) for p in album.photos])
 
     # Remove duplicate paths
     raw_image_paths = list(set(raw_image_paths))
@@ -456,23 +473,23 @@ def share_email():
         if person:
             p_ids = list({f.photo_id for f in person.faces if f.photo_id})
             photos = Photo.query.filter(Photo.id.in_(p_ids), Photo.user_id == g.current_user.id).all() if p_ids else []
-            raw_image_paths.extend([os.path.abspath(p.file_path) for p in photos])
+            raw_image_paths.extend([get_safe_path_or_url(p.file_path) for p in photos])
 
     if album_id:
         album = Album.query.filter_by(id=album_id, user_id=g.current_user.id).first()
         if album:
-            raw_image_paths.extend([os.path.abspath(p.file_path) for p in album.photos])
+            raw_image_paths.extend([get_safe_path_or_url(p.file_path) for p in album.photos])
 
     if label_name:
         person = Person.query.filter(Person.user_id == g.current_user.id, Person.name.ilike(f"%{label_name}%")).first()
         if person:
             p_ids = list({f.photo_id for f in person.faces if f.photo_id})
             photos = Photo.query.filter(Photo.id.in_(p_ids), Photo.user_id == g.current_user.id).all() if p_ids else []
-            raw_image_paths.extend([os.path.abspath(p.file_path) for p in photos])
+            raw_image_paths.extend([get_safe_path_or_url(p.file_path) for p in photos])
         else:
             album = Album.query.filter(Album.user_id == g.current_user.id, Album.name.ilike(f"%{label_name}%")).first()
             if album:
-                raw_image_paths.extend([os.path.abspath(p.file_path) for p in album.photos])
+                raw_image_paths.extend([get_safe_path_or_url(p.file_path) for p in album.photos])
 
     # Remove duplicate paths
     raw_image_paths = list(set(raw_image_paths))

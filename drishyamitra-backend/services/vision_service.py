@@ -34,14 +34,25 @@ class VisionService:
                 - confidence (float): Detection confidence score (0-1).
               Returns an empty list when no faces are found or on any error.
         """
+        # Check config or environmental variables to see if lightweight mode is active
+        use_lightweight = False
+        try:
+            from flask import current_app
+            use_lightweight = current_app.config.get("USE_LIGHTWEIGHT_DETECTION", False)
+        except Exception:
+            import os
+            use_lightweight = os.environ.get('USE_LIGHTWEIGHT_DETECTION', '').lower() == 'true' or 'RENDER' in os.environ
+
+        if use_lightweight:
+            return VisionService._detect_faces_lightweight(image_path)
+
         try:
             from deepface import DeepFace
         except ImportError:
             logger.warning(
-                "deepface is not installed – face detection unavailable. "
-                "Install with: pip install deepface"
+                "deepface is not installed – falling back to lightweight face detection."
             )
-            return []
+            return VisionService._detect_faces_lightweight(image_path)
 
         try:
             results = DeepFace.represent(
@@ -51,8 +62,9 @@ class VisionService:
                 enforce_detection=False,
             )
         except Exception as exc:
-            logger.error("DeepFace.represent failed for '%s': %s", image_path, exc)
-            return []
+            logger.error("DeepFace.represent failed for '%s': %s. Falling back to lightweight face detection.", image_path, exc)
+            return VisionService._detect_faces_lightweight(image_path)
+
 
         if not results:
             return []
@@ -90,6 +102,69 @@ class VisionService:
             image_path,
         )
         return faces
+
+    @staticmethod
+    def _detect_faces_lightweight(image_path):
+        """
+        Lightweight face detection fallback using OpenCV Haar Cascades
+        and a 512-dim grayscale normalized pixel-vector pseudo-embedding.
+        """
+        try:
+            import cv2
+            import numpy as np
+
+            logger.info("Using lightweight OpenCV Haar Cascade face detection for %s", image_path)
+
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            if face_cascade.empty():
+                logger.error("Haar Cascade XML failed to load.")
+                return []
+
+            img = cv2.imread(image_path)
+            if img is None:
+                logger.error("Haar Cascade fallback: Could not read image at %s", image_path)
+                return []
+
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            detected_faces = face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=4,
+                minSize=(30, 30)
+            )
+
+            faces = []
+            for (x, y, w, h) in detected_faces:
+                # Crop face and resize to 32x16 to get exactly 512 pixels
+                face_crop = gray[max(0, int(y)):int(y+h), max(0, int(x)):int(x+w)]
+                if face_crop.size == 0:
+                    continue
+                face_resized = cv2.resize(face_crop, (32, 16))
+                
+                # Normalize and flatten to 512-dim unit vector
+                emb = face_resized.flatten().astype(np.float64)
+                norm = np.linalg.norm(emb)
+                if norm > 0:
+                    emb = emb / norm
+                embedding = emb.tolist()
+
+                bounding_box = {
+                    'x': int(x),
+                    'y': int(y),
+                    'w': int(w),
+                    'h': int(h),
+                }
+                faces.append({
+                    'bounding_box': bounding_box,
+                    'embedding': embedding,
+                    'confidence': 1.0,
+                })
+
+            logger.info("Haar Cascade: Detected %d face(s) in %s", len(faces), image_path)
+            return faces
+        except Exception as exc:
+            logger.error("Lightweight Haar Cascade face detection failed: %s", exc)
+            return []
 
     @staticmethod
     def extract_face_region(image_path, bounding_box):

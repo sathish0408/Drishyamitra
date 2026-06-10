@@ -62,6 +62,7 @@ def create_app(test_config=None):
         # Import all models so SQLAlchemy knows about them
         import models  # noqa: F401
         _run_db_migrations(app)
+        _run_universal_db_migrations(db)
         db.create_all()
         _seed_default_user(db)
         _backfill_legacy_user_ids(db)
@@ -308,6 +309,61 @@ def _backfill_legacy_user_ids(db):
     except Exception as exc:
         db.session.rollback()
         logger.exception("Failed to backfill legacy user_ids: %s", exc)
+
+def _run_universal_db_migrations(db):
+    """Run migrations agnostically using SQLAlchemy's inspector to add missing columns in production."""
+    import logging
+    from sqlalchemy import inspect
+    logger = logging.getLogger(__name__)
+
+    try:
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        logger.info("Universal Migrations: Found tables: %s", tables)
+
+        # 1. Migrate 'faces' table
+        if 'faces' in tables:
+            cols = [col['name'] for col in inspector.get_columns('faces')]
+            if 'is_manually_labeled' not in cols:
+                logger.info("Universal Migrating 'faces': adding is_manually_labeled column")
+                db.session.execute(db.text("ALTER TABLE faces ADD COLUMN is_manually_labeled BOOLEAN DEFAULT FALSE"))
+                db.session.commit()
+
+        # 2. Migrate 'persons' table
+        if 'persons' in tables:
+            cols = [col['name'] for col in inspector.get_columns('persons')]
+            if 'user_id' not in cols:
+                logger.info("Universal Migrating 'persons': adding user_id column")
+                db.session.execute(db.text("ALTER TABLE persons ADD COLUMN user_id INTEGER REFERENCES users(id)"))
+                db.session.commit()
+
+        # 3. Migrate 'albums' table
+        if 'albums' in tables:
+            cols = [col['name'] for col in inspector.get_columns('albums')]
+            if 'user_id' not in cols:
+                logger.info("Universal Migrating 'albums': adding user_id column")
+                db.session.execute(db.text("ALTER TABLE albums ADD COLUMN user_id INTEGER REFERENCES users(id)"))
+                db.session.commit()
+
+        # 4. Migrate 'photos' table
+        if 'photos' in tables:
+            cols = [col['name'] for col in inspector.get_columns('photos')]
+            if 'background_features' not in cols:
+                logger.info("Universal Migrating 'photos': adding background_features column")
+                db.session.execute(db.text("ALTER TABLE photos ADD COLUMN background_features TEXT"))
+                db.session.commit()
+
+        # 5. Migrate 'delivery_history' table
+        if 'delivery_history' in tables:
+            cols = [col['name'] for col in inspector.get_columns('delivery_history')]
+            if 'error_message' not in cols:
+                logger.info("Universal Migrating 'delivery_history': adding error_message column")
+                db.session.execute(db.text("ALTER TABLE delivery_history ADD COLUMN error_message TEXT"))
+                db.session.commit()
+
+    except Exception as exc:
+        db.session.rollback()
+        logger.exception("Universal DB migration failed: %s", exc)
 
 
 
